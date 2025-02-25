@@ -1,7 +1,743 @@
-echo "# BD_project" >> README.md
-git init
-git add README.md
-git commit -m "first commit"
-git branch -M main
-git remote add origin https://github.com/IgAl655/BD_project.git
-git push -u origin main
+Проектная работа по дисциплине «Базе данных».
+
+Этап 1: Разработка даталогической модели базы данных.
+Данная база данных предназначена для хранения информации о командах, игроках, руководителях и матчах любительской футбольной лиги.
+
+Даталогическая модель базы данных
+ 
+
+Таблицы:
+	lfl_teams: хранит информацию о всех командах, а именно их названия и уровень соревнования.
+	first_league и second_league: содержат более подробную информацию о командах, которые участвуют в первой лиге и второй лиге.
+	team_owners:  таблица с информацией о руководителях команд и способах связи с ними.
+	lfl_players: представляет из себя таблицу с информацией об игроках
+	match_results: содержит информацию о матчах
+Некоторые ограничения, которые есть в данной базе данных:
+	lfl_teams: team_name не может быть пустым и также является уникальным.
+	first_league: wins не может быть NULL.
+	second_league: loses не может быть NULL.
+	team_owners: first_name не может быть NULL, но patronymic уже может принимать значение NULL.
+	lfl_players: first_name не может быть NULL, но patronymic уже может принимать значение NULL.
+	match_results: match_date принимает любое значение, кроме NULL.
+
+Этап 2: Создание базы данных в СУБД PostgreSQL. Заполнение таблиц данными. Составление осмысленных запросов к базе данных.
+
+20 осмысленных запросов к базе данных
+1. Выводит команды по количеству очков в первой лиге
+2. Выводит команды по количеству очков во второй лиге
+3. Выводит команды, который могут выйти в первую лигу
+4. Выводит команды, которые вылетают из второй лиги
+5. Выводит дублирующие составы
+6. Команды в первой лиге с победами больше 10
+7. Команды во второй лиге с наименьшим количеством поражений
+8. Вывести игроков Ориона
+9. Вывести информацию о руководителе Дибиси
+10. Среднее количество очков команд в первой лиге
+11. Вывести число голов Ориона
+12. Вывести матчи команды Орион
+13. Вывести команду с наибольшим количеством очков в двух лигах
+14. Вывести список всех команд и их количество очков
+15. Выводит команды с наибольшим количеством побед в матчах, которые есть в базе
+16. Выводит команды с их очками и количеством поражений на основе матчей
+17. Выводит команды с наибольшим количеством ничьих на основе матчей
+18. Выводит однофамильцев из таблицы игроков
+19. Выводит команды без побед
+20. Выводит самую пропускающую команду на основе матчей
+
+Этап 3: Добавление индексов в базу данных и обоснование их использования. Добавление триггера, придуманного на 1 этапе и добавление 5 процедур.
+
+	Индексы для таблицы lfl_teams
+Этот индекс ускорит поиск команд по их имени, а также может улучшить производительность, 
+ если вы часто используете сортировку или фильтрацию по team_name.
+CREATE INDEX idx_lfl_teams_team_name ON lfl_teams (team_name);
+
+Индекс ускорит запросы, которые фильтруют или сортируют команды по уровню соревнований.
+CREATE INDEX idx_lfl_teams_competition_level ON lfl_teams (competition_level);
+
+	Индексы для таблиц с внешними ключами
+Поскольку поле id_team является внешним ключом, связывающим эти таблицы с таблицей lfl_teams, создание индекса на этих полях ускорит операции слияния (JOIN) и фильтрацию данных по этим полям.
+
+CREATE INDEX idx_first_league_id_team ON first_league (id_team);
+CREATE INDEX idx_second_league_id_team ON second_league (id_team);
+CREATE INDEX idx_lfl_players_id_team ON lfl_players (id_team);
+CREATE INDEX idx_team_owners_team_name ON team_owners (team_name);
+
+	Индексы для таблицы match_results
+ Эти индексы ускоряют выполнение запросов, которые ищут все матчи, в которых участвовала конкретная команда, как в качестве первой, так и во второй команды.
+
+CREATE INDEX idx_match_results_team_1_id ON match_results (team_1_id);
+CREATE INDEX idx_match_results_team_2_id ON match_results (team_2_id);
+
+Индекс ускоряет поиск матчей по дате и сортировку матчей по времени.
+CREATE INDEX idx_match_results_match_date ON match_results (match_date);
+
+
+	Индекс для lfl_players по фамилии и имени
+Индекс ускоряет поиск игроков по фамилии и имени, особенно в случае поиска однофамильцев или игроков с конкретными фамилиями.
+CREATE INDEX idx_lfl_players_last_name_first_name ON lfl_players (last_name, first_name);
+
+
+
+
+Для заполнения таблиц first_league и second_league используется триггер insert_into_league.
+	Создаем функцию, которая будет на основе столбца competition_level будет записывать значение в определенную таблицу.
+	Создаем триггер для вызова этой функции.
+	При заполнении таблицы lfl_teams таблицы first_league и second_league будет автоматически заполняться.
+Так как у нас есть информация о количестве побед, ничьих и поражений, то мы можем сделать триггер, который будет высчитывать общее число игр. Таких триггеров нам нужно два.
+	Добавляем столбец games_played.
+	Создаем функцию обновляет поля games_played.
+	Создаем триггер для вызова функции.
+	Инициализация поля games_played.
+С таким триггером мы можем спокойно заполнять поля wins, loses и draws не боясь, что количество игр будет отличаться от общей суммы этих полей, но возникает проблема. Так как в лиге количество команд ограничено на сезон, то это значит, что и количество игр будет фиксированным. А именно будет считаться по формуле:
+(количество команд-1)×2=количество игр в сезоне   (1)
+Для того, чтобы количество игр не превысило допустимое число мы создадим триггер, который будет проверять количество игр у команд в первой и второй лиге.
+	Создаем функцию, которая сравнивает количество сыгранных матчей с числом, полученным по формуле (1). 
+	Создаем триггер для вызова функции.
+Также в базе данных используются другие триггеры, такие как:
+	Триггер для проверки уникальности игрока по имени и фамилии в одной команде.
+	Триггер для вычисления значения в поле team_name в таблице lfl_players.
+	Триггер для заполнения поля mail у руководителей.
+
+Добавление пяти процедур.
+	Процедура для обновления числа побед, поражений и ничьих в первой лиге.
+	Процедура для обновления числа побед, поражений и ничьих во второй лиге.
+	Процедура для добавления команды в lfl_teams.
+	Процедура для добавления игрока в команду.
+	Процедура для получения статистики команды.
+	
+
+
+
+
+
+Приложение
+Таблицы
+CREATE TABLE lfl_teams(
+	id_team SERIAL PRIMARY KEY ,
+	team_name VARCHAR(64) NOT NULL UNIQUE,
+	competition_level INT NOT NULL DEFAULT 1
+);
+
+CREATE TABLE first_league(
+	id_team INT REFERENCES lfl_teams(id_team),
+	team_name VARCHAR(64) NOT NULL,
+	games_played INT NOT NULL DEFAULT 0,
+	wins INT NOT NULL CHECK (wins >= 0) DEFAULT 0,
+	draws INT NOT NULL CHECK (draws >= 0) DEFAULT 0,
+	loses INT NOT NULL CHECK (loses >= 0) DEFAULT 0,
+	points INT NOT NULL CHECK (points >= 0) DEFAULT 0,
+	CONSTRAINT check_game_counts CHECK (wins + draws + loses = games_played)
+);
+
+CREATE TABLE second_league(
+	id_team INT REFERENCES lfl_teams(id_team),
+	team_name VARCHAR(64) NOT NULL,
+	games_played INT NOT NULL DEFAULT 0,
+	wins INT NOT NULL CHECK (wins >= 0) DEFAULT 0,
+	draws INT NOT NULL CHECK (draws >= 0) DEFAULT 0,
+	loses INT NOT NULL CHECK (loses >= 0) DEFAULT 0,
+	points INT NOT NULL CHECK (points >= 0) DEFAULT 0,
+	CONSTRAINT check_game_counts CHECK (wins + draws + loses = games_played)
+);
+
+CREATE TABLE team_owners(
+	team_name VARCHAR(64) REFERENCES lfl_teams(team_name),
+	first_name VARCHAR(64) NOT NULL,
+	last_name VARCHAR(64) NOT NULL,
+	patronymic VARCHAR(64) NULL,
+	phone VARCHAR(60) NOT NULL,
+	mail VARCHAR(60) NULL
+);
+
+CREATE TABLE lfl_players(
+	id_team INT REFERENCES lfl_teams(id_team),
+	id_player SERIAL PRIMARY KEY,
+	first_name VARCHAR(64) NOT NULL,
+	last_name VARCHAR(64) NOT NULL,
+	patronymic VARCHAR(64) NULL,
+	team_name VARCHAR(64) NULL
+);
+
+CREATE TABLE match_results (
+	match_id SERIAL PRIMARY KEY,
+	team_1_id INT REFERENCES lfl_teams(id_team),
+	team_2_id INT REFERENCES lfl_teams(id_team),
+	team_1_score INT NOT NULL DEFAULT 0,
+	team_2_score INT NOT NULL DEFAULT 0,
+	match_date DATE NOT NULL
+);
+
+Заполнение таблицы lfl_teams
+
+INSERT INTO lfl_teams(team_name, competition_level) VALUES
+('Дибиси', 1),
+('Одиссея', 1),
+('Глория', 1),
+('Энергия', 1),
+('Андреевка', 1),
+('Сова', 1),
+('Патриоты', 1),
+('ФкЗБ', 1),
+('Элемер', 1),
+('Гуд Вуд', 1),
+
+('Глория-2', 2),
+('Дибиси-2', 2),
+('Орион', 2),
+('Апекс', 2),
+('Русичи', 2),
+('Гост', 2),
+('НоуНейм', 2),
+('Сова-2', 2),
+('Фантом', 2),
+('Энергия-2', 2),
+('Велтон Парк', 2),
+('Плешущиеся Пираты', 2),
+('Форс', 2),
+('Сандерленд', 2),
+('Электрон', 2),
+('Авангард', 2);
+
+
+
+
+Обновляем через процедуру данные в таблицах first_league и second_league
+
+CALL UpdateTeamStatsByNameFirstLeague('Дибиси', 16, 0, 2);
+CALL UpdateTeamStatsByNameFirstLeague('Одиссея', 12, 3, 3);
+CALL UpdateTeamStatsByNameFirstLeague('Глория', 	10, 1, 7);
+CALL UpdateTeamStatsByNameFirstLeague('Энергия', 9, 3, 6);
+CALL UpdateTeamStatsByNameFirstLeague('Андреевка', 8, 5, 5);
+CALL UpdateTeamStatsByNameFirstLeague('Сова', 	9, 1, 8);
+CALL UpdateTeamStatsByNameFirstLeague('Патриоты', 7, 1, 10);
+CALL UpdateTeamStatsByNameFirstLeague('ФкЗБ', 	6, 2, 10);
+CALL UpdateTeamStatsByNameFirstLeague('Элемер', 4, 2, 12);
+CALL UpdateTeamStatsByNameFirstLeague('Гуд Вуд', 0, 0, 18);
+
+CALL UpdateTeamStatsByNameSecondLeague('Глория-2', 	25, 1, 4);
+CALL UpdateTeamStatsByNameSecondLeague('Дибиси-2', 	24, 2, 4);
+CALL UpdateTeamStatsByNameSecondLeague('НоуНейм', 	23, 3, 4);
+CALL UpdateTeamStatsByNameSecondLeague('Сова-2', 	17, 6, 7);
+CALL UpdateTeamStatsByNameSecondLeague('Фантом', 	18, 1, 11);
+CALL UpdateTeamStatsByNameSecondLeague('Энергия-2', 	16, 3, 11);
+CALL UpdateTeamStatsByNameSecondLeague('Велтон Парк', 13, 3, 14);
+CALL UpdateTeamStatsByNameSecondLeague('Апекс', 	13, 3, 14);
+CALL UpdateTeamStatsByNameSecondLeague('Русичи', 	12, 4, 14);
+CALL UpdateTeamStatsByNameSecondLeague('Плешущиеся Пираты', 11, 5 , 14);
+CALL UpdateTeamStatsByNameSecondLeague('Авангард', 	11, 4, 15);
+CALL UpdateTeamStatsByNameSecondLeague('Орион', 	10, 4, 16);
+CALL UpdateTeamStatsByNameSecondLeague('Форс',	7,  2, 21);
+CALL UpdateTeamStatsByNameSecondLeague('Электрон', 	6,  4, 20);
+CALL UpdateTeamStatsByNameSecondLeague('Гост', 		5,  3, 22);
+CALL UpdateTeamStatsByNameSecondLeague('Сандерленд', 5,  0, 25);
+
+Заносим информацию об игроках в таблицу lfl_players
+
+CALL add_player_to_team('Орион', 'Даниил', 'Иванов', 'Александрович');
+CALL add_player_to_team('Орион', 'Никита', 'Нагайкин', 'Сергеевич');
+CALL add_player_to_team('Орион', 'Артем', 'Сенчин', 'Борисович');
+CALL add_player_to_team('Орион', 'Егор', 'Агейкин', 'Антонович');
+CALL add_player_to_team('Орион', 'Никита', 'Агейкин', 'Антонович');
+CALL add_player_to_team('Орион', 'Александр', 'Селиверстов', 'Дмитриевич');
+CALL add_player_to_team('Орион', 'Егор', 'Федькин', 'Владимирович');
+CALL add_player_to_team('Орион', 'Дмитрий', 'Орленкович', 'Марьянович');
+CALL add_player_to_team('Орион', 'Александр', 'Малашенко', 'Геннадьевич');
+CALL add_player_to_team('Орион', 'Николай', 'Цурка', 'Игоревич');
+ 	
+Заполняем таблицу team_owners
+
+INSERT INTO team_owners(team_name, first_name, last_name, patronymic, phone) VALUES
+('Дибиси','Евдокимов','Иван',  'Алексеевич',89999999999),
+('Одиссея','Селезнев', 'Александр',   'Викторович',89998888888),
+('Глория','Попаз', 'Михаил',  'Петрович', 89997777777),
+('Энергия','Побединский', 'Артём',  'Владимирович',89996666666),
+('Андреевка','Аржуханов', 'Алексей',  'Равильевич',89995555555),
+('Сова','Семушин', 'Сергей', 'Владимирович',89994444444),
+('Патриоты','Прижилов', 'Константин',  'Михайлович',89993333333),
+('ФкЗБ','Митрошин', 'Александр’,  'Валерьевич',89992222222),
+('Элемер','Ханаков', 'Павел', 'Сергеевич',89991111111),
+('Гуд Вуд','Меняело','Андрей',   'Александрович',89990000000);
+
+Заполняем таблицу match_results
+
+INSERT INTO match_results(team_1_id, team_2_id, team_1_score, team_2_score, match_date) VALUES
+(39, 38, 2, 1, '2024-06-06'),
+(42, 48, 4, 2, '2024-11-07'),
+(51, 41, 0, 5, '2024-11-07'),
+(39, 47, 2, 4, '2024-11-07'),
+(45, 39, 0, 7, '2024-10-31'),
+(52, 38, 0, 11, '2024-10-31'),
+(37, 50, 6, 1, '2024-10-29'),
+(51, 37, 0, 5, '2024-10-24'),
+(50, 47, 6, 4, '2024-10-26'),
+(48, 49, 3, 3, '2024-10-26');
+
+Процедура для обновления числа побед, поражений и ничьих в первой лиге
+CREATE OR REPLACE PROCEDURE UpdateTeamStatsByNameFirstLeague(
+    team_name_input VARCHAR,
+    new_wins INT,
+    new_draws INT,      
+    new_loses INT            
+)
+LANGUAGE plpgsql
+AS
+$$
+BEGIN
+    UPDATE first_league
+    SET wins = new_wins,
+        draws = new_draws,
+        loses = new_loses,
+        points = (new_wins * 3) + (new_draws * 1)
+    WHERE team_name = team_name_input;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Team "%" not found', team_name_input;
+    END IF;
+END;
+$$;
+
+Пример:
+CALL UpdateTeamStatsByNameFirstLeague('Дибиси', 16, 0, 2);
+
+
+Процедура для обновления числа побед, поражений и ничьих во второй лиге
+CREATE OR REPLACE PROCEDURE UpdateTeamStatsByNameSecondLeague(
+    team_name_input VARCHAR,
+    new_wins INT,
+    new_draws INT,
+    new_loses INT
+)
+LANGUAGE plpgsql
+AS
+$$
+BEGIN
+    UPDATE second_league
+    SET wins = new_wins,
+        draws = new_draws,
+        loses = new_loses,
+        points = (new_wins * 3) + (new_draws * 1)
+    WHERE team_name = team_name_input;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Team "%" not found', team_name_input;
+    END IF;
+END;
+$$;
+
+Пример:
+CALL UpdateTeamStatsByNameSecondLeague('Глория-2', 25, 1, 4);
+
+
+
+
+Процедура для добавления команды в lfl_teams
+CREATE OR REPLACE PROCEDURE add_new_team(
+    p_team_name VARCHAR,
+    p_division INT,
+    p_id INT
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    -- Проверка, существует ли команда с таким id в таблице lfl_teams
+    IF NOT EXISTS (SELECT 1 FROM lfl_teams WHERE id_team = p_id) THEN
+        INSERT INTO lfl_teams(id_team, team_name, competition_level)
+        VALUES (p_id, p_team_name, p_division);
+    ELSE
+        -- Если команда с таким id уже существует, обновим её данные
+        UPDATE lfl_teams
+        SET team_name = p_team_name, competition_level = p_division
+        WHERE id_team = p_id;
+    END IF;
+    IF p_division = 1 THEN
+        IF NOT EXISTS (SELECT 1 FROM first_league WHERE id_team = p_id) THEN
+            INSERT INTO first_league(id_team, team_name)
+            VALUES (p_id, p_team_name);
+        END IF;
+    ELSIF p_division = 2 THEN
+        IF NOT EXISTS (SELECT 1 FROM second_league WHERE id_team = p_id) THEN
+            INSERT INTO second_league(id_team, team_name)
+            VALUES (p_id, p_team_name);
+        END IF;
+    END IF;
+END;
+$$;
+
+Пример:
+CALL add_new_team('Орион-2', 1, 5);
+
+Процедура для добавления игрока в команду.
+CREATE OR REPLACE PROCEDURE add_player_to_team(
+    p_team_name VARCHAR,
+    p_first_name VARCHAR,
+    p_last_name VARCHAR,
+    p_patronymic VARCHAR
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_team_id INT;
+BEGIN
+    SELECT id_team INTO v_team_id
+    FROM lfl_teams
+    WHERE team_name = p_team_name;
+    IF v_team_id IS NULL THEN
+        RAISE EXCEPTION 'Команда с названием "%" не найдена', p_team_name;
+    END IF;
+    INSERT INTO lfl_players (id_team, first_name, last_name, patronymic)
+    VALUES (v_team_id, p_first_name, p_last_name, p_patronymic);
+END;
+$$;
+
+Пример:
+CALL add_player_to_team('Глория', 'Цепков', 'Георгий', 'Николаевич');
+
+Процедура для получения статистики команды.
+CREATE OR REPLACE PROCEDURE get_team_statistics(
+    p_team_id INT
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_games_played INT;
+    v_wins INT;
+    v_draws INT;
+    v_loses INT;
+    v_points INT;
+BEGIN
+    -- Получение статистики команды из первой лиги
+    IF EXISTS (SELECT 1 FROM first_league WHERE id_team = p_team_id) THEN
+        SELECT games_played, wins, draws, loses, points
+        INTO v_games_played, v_wins, v_draws, v_loses, v_points
+        FROM first_league
+        WHERE id_team = p_team_id;
+    -- Получение статистики команды из второй лиги
+    ELSIF EXISTS (SELECT 1 FROM second_league WHERE id_team = p_team_id) THEN
+        SELECT games_played, wins, draws, loses, points
+        INTO v_games_played, v_wins, v_draws, v_loses, v_points
+        FROM second_league
+        WHERE id_team = p_team_id;
+    ELSE
+        RAISE EXCEPTION 'Team not found in any league';
+    END IF;
+    RAISE NOTICE 'Статистика команды: Количество игр: %, Побед: %, Ничьих: %, Поражений: %, Очков: %', 
+                 v_games_played, v_wins, v_draws, v_loses, v_points;
+END;
+$$;
+
+Пример:
+CALL get_team_statistics(39);
+
+Запросы
+
+1. Выводит команды по количеству очков в первой лиге
+SELECT team_name, wins, loses, draws, points
+FROM first_league
+ORDER BY points DESC;
+
+2. Выводит команды по количеству очков во второй лиге
+SELECT team_name, wins, loses, draws, points
+FROM second_league
+ORDER BY points DESC;
+
+3. Выводит команды, который могут выйти в первую лигу
+SELECT team_name AS "Команды, которые выходят в первую лигу", points AS "Очки"
+FROM second_league
+WHERE team_name NOT LIKE '%-2%'
+ORDER BY points DESC
+LIMIT 5;
+
+4. Выводит команды, которые вылетают из второй лиги
+SELECT team_name AS "Команды, которые вылетают из второй лиги", points AS "Очки"
+FROM second_league
+WHERE team_name NOT LIKE '%-2%'
+ORDER BY points ASC
+LIMIT 2;
+
+5. Выводит дублирующие составы
+SELECT team_name AS "Дубли в первой лиге", points AS "Очки"
+FROM second_league
+WHERE team_name LIKE '%-2%'
+ORDER BY points DESC
+
+6. Команды в первой лиге с победами больше 10
+SELECT team_name, wins
+FROM first_league
+WHERE wins > 10
+ORDER BY wins DESC;
+
+7. Команды во второй лиге с наименьшим количеством поражений
+SELECT team_name, loses
+FROM second_league
+WHERE loses = (SELECT MIN(loses) FROM second_league);
+
+8. Вывести игроков Ориона
+SELECT first_name, last_name, patronymic
+FROM lfl_players
+WHERE id_team = 39;
+
+9. Вывести информацию о руководителе Дибиси
+SELECT first_name, last_name, phone, mail
+FROM team_owners
+WHERE team_name LIKE 'Дибиси';
+
+10.  Среднее количество очков команд в первой лиге
+SELECT AVG(points) AS avg_points
+FROM first_league;
+
+11. Вывести число голов
+SELECT SUM(team_1_score) + SUM(team_2_score) AS total_goals
+FROM match_results
+WHERE team_1_id = (SELECT id_team FROM lfl_teams WHERE team_name = 'Орион')
+   OR team_2_id = (SELECT id_team FROM lfl_teams WHERE team_name = 'Орион');
+
+12. Вывести матчи команды Орион
+SELECT match_id, team_1_score, team_2_score, match_date
+FROM match_results
+WHERE team_1_id = 39 OR team_2_id = 39; 
+
+13. Вывести команду с наибольшим количеством очков в двух лигах
+SELECT team_name, points
+FROM (
+    SELECT team_name, points FROM first_league
+    UNION ALL
+    SELECT team_name, points FROM second_league
+) AS all_teams
+ORDER BY points DESC
+LIMIT 1;
+
+14. Вывести список всех команд и их количество очков
+SELECT t.team_name,
+       COALESCE(MAX(fl.points), 0) + COALESCE(MAX(sl.points), 0) AS max_points
+FROM lfl_teams t
+LEFT JOIN first_league fl ON t.id_team = fl.id_team
+LEFT JOIN second_league sl ON t.id_team = sl.id_team
+GROUP BY t.team_name
+ORDER BY max_points DESC;
+
+15. Выводит команды с наибольшим количеством побед в матчах, которые есть в базе
+SELECT t.team_name,
+       COUNT(mr.match_id) AS wins
+FROM lfl_teams t
+JOIN match_results mr ON (mr.team_1_id = t.id_team AND mr.team_1_score > mr.team_2_score) OR (mr.team_2_id = t.id_team AND mr.team_2_score > mr.team_1_score)
+GROUP BY t.team_name
+ORDER BY wins DESC;
+
+16. Выводит команды с их очками и количеством поражений на основе матчей
+SELECT t.team_name,
+       SUM(CASE
+           WHEN (mr.team_1_id = t.id_team AND mr.team_1_score < mr.team_2_score) OR
+                (mr.team_2_id = t.id_team AND mr.team_2_score < mr.team_1_score)
+           THEN 1 ELSE 0 END) AS loses
+FROM lfl_teams t
+JOIN match_results mr ON mr.team_1_id = t.id_team OR mr.team_2_id = t.id_team
+GROUP BY t.team_name
+ORDER BY loses DESC;
+
+17. Выводит команды с наибольшим количеством ничьих на основе матчей
+SELECT t.team_name,
+       COUNT(mr.match_id) AS draws
+FROM lfl_teams t
+JOIN match_results mr ON (mr.team_1_id = t.id_team AND mr.team_1_score = mr.team_2_score)
+                      OR (mr.team_2_id = t.id_team AND mr.team_2_score = mr.team_1_score)
+GROUP BY t.team_name
+ORDER BY draws DESC;
+
+18. Выводит однофамильцев из таблицы игроков
+SELECT lp.last_name, 
+       STRING_AGG(lp.first_name || ' ' || lp.last_name, ', ') AS players
+FROM lfl_players lp
+GROUP BY lp.last_name
+HAVING COUNT(lp.last_name) > 1
+ORDER BY lp.last_name;
+
+19. Выводит команды без побед
+SELECT t.team_name, 
+       CASE 
+           WHEN fl.id_team IS NOT NULL THEN 'Первая лига' 
+           WHEN sl.id_team IS NOT NULL THEN 'Вторая лига' 
+       END AS league
+FROM lfl_teams t
+LEFT JOIN first_league fl ON t.id_team = fl.id_team
+LEFT JOIN second_league sl ON t.id_team = sl.id_team
+WHERE (fl.wins = 0 OR sl.wins = 0)
+ORDER BY t.team_name;
+
+20. Выводит самую пропускающую команду на основе матчей
+SELECT t.team_name,
+       SUM(CASE 
+               WHEN mr.team_1_id = t.id_team THEN mr.team_2_score
+               WHEN mr.team_2_id = t.id_team THEN mr.team_1_score
+               ELSE 0
+           END) AS goals_conceded
+FROM lfl_teams t
+JOIN match_results mr ON mr.team_1_id = t.id_team OR mr.team_2_id = t.id_team
+GROUP BY t.team_name
+ORDER BY goals_conceded DESC
+LIMIT 1;
+
+
+
+
+Триггеры
+
+Триггер для заполнения первой и второй лиги
+CREATE OR REPLACE FUNCTION insert_into_league() 
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.competition_level = 1 THEN
+        INSERT INTO first_league(id_team, team_name)
+        VALUES (NEW.id_team, NEW.team_name);
+    ELSIF NEW.competition_level = 2 THEN
+        INSERT INTO second_league(id_team, team_name)
+        VALUES (NEW.id_team, NEW.team_name);
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_insert_into_league
+AFTER INSERT ON lfl_teams
+FOR EACH ROW
+EXECUTE FUNCTION insert_into_league();
+
+
+
+Триггер для вычисления количества игр в таблице (first_league)
+CREATE OR REPLACE FUNCTION calculate_games_played_first_league()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.games_played := NEW.wins + NEW.draws + NEW.loses;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_calculate_games_played_first_league
+  BEFORE INSERT OR UPDATE ON first_league
+  FOR EACH ROW
+  EXECUTE FUNCTION calculate_games_played_first_league();
+
+
+Триггер для вычисления количества игр в таблице (second_league)
+CREATE OR REPLACE FUNCTION calculate_games_played_second_league()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.games_played := NEW.wins + NEW.draws + NEW.loses;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_calculate_games_played_second_league
+  BEFORE INSERT OR UPDATE ON second_league
+  FOR EACH ROW
+  EXECUTE FUNCTION calculate_games_played_second_league();
+
+
+
+
+Триггер для заполнения поля mail (team_owners)
+CREATE OR REPLACE FUNCTION set_default_mail() 
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.mail IS NULL THEN
+        NEW.mail := LOWER(NEW.first_name || '.' || NEW.last_name || '@yandex.com');
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_set_default_mail
+BEFORE INSERT ON team_owners
+FOR EACH ROW
+EXECUTE FUNCTION set_default_mail();
+
+
+
+
+Триггер ограничения по количеству игр в ПЕРВОЙ ЛИГЕ (first_league)
+CREATE OR REPLACE FUNCTION check_max_games_in_season_first_league()
+RETURNS TRIGGER AS $$
+DECLARE
+  max_games INT;
+  team_count INT;
+BEGIN
+  -- Считываем количество команд в лиге first_league
+  SELECT COUNT(*) INTO team_count FROM first_league;
+  max_games := (team_count * 2) - 2;
+  NEW.games_played := NEW.wins + NEW.draws + NEW.loses;
+  IF NEW.games_played > max_games THEN
+    RAISE EXCEPTION 'Команда % не может сыграть больше % матчей в сезоне, текущие игры: %',
+                    NEW.team_name, max_games, NEW.games_played;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_check_max_games_second_league
+  BEFORE INSERT OR UPDATE ON first_league
+  FOR EACH ROW
+  EXECUTE FUNCTION check_max_games_in_season_second_league();
+
+
+Триггер ограничения по количеству игр во ВТОРОЙ ЛИГЕ (second_league)
+CREATE OR REPLACE FUNCTION check_max_games_in_season_second_league()
+RETURNS TRIGGER AS $$
+DECLARE
+  max_games INT;
+  team_count INT;
+BEGIN
+  SELECT COUNT(*) INTO team_count FROM second_league;
+  max_games := (team_count * 2) - 2;
+  NEW.games_played := NEW.wins + NEW.draws + NEW.loses;
+  IF NEW.games_played > max_games THEN
+    RAISE EXCEPTION 'Команда % не может сыграть больше % матчей в сезоне, текущие игры: %',
+                    NEW.team_name, max_games, NEW.games_played;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_check_max_games_second_league
+  BEFORE INSERT OR UPDATE ON second_league
+  FOR EACH ROW
+  EXECUTE FUNCTION check_max_games_in_season_second_league();
+
+
+
+Триггер для проверки уникальности игрока при вставке или обновлении (lfl_players)
+CREATE OR REPLACE FUNCTION check_unique_player_in_team()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- Проверяем, есть ли уже игрок с таким же именем и фамилией в той же команде
+  IF EXISTS (
+    SELECT 1 FROM lfl_players
+    WHERE team_name = NEW.team_name
+    AND first_name = NEW.first_name
+    AND last_name = NEW.last_name
+  ) THEN
+    RAISE EXCEPTION 'Игрок с именем % % уже существует в команде %',
+                    NEW.first_name, NEW.last_name, NEW.team_name;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_check_unique_player_in_team
+  BEFORE INSERT OR UPDATE ON lfl_players
+  FOR EACH ROW
+  EXECUTE FUNCTION check_unique_player_in_team();
+
+
+Триггер для вычисления значения в поле team_name (lfl_players)
+CREATE OR REPLACE FUNCTION update_team_name()
+RETURNS TRIGGER AS $$
+BEGIN
+    SELECT team_name INTO NEW.team_name
+    FROM lfl_teams
+    WHERE lfl_teams.id_team = NEW.id_team;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_update_team_name
+BEFORE INSERT ON lfl_players
+FOR EACH ROW
+EXECUTE FUNCTION update_team_name();
